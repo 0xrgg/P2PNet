@@ -56,6 +56,7 @@ public class FileWorkflow : IFileWorkflow
         });
     }
 
+    // TODO: Consolidate similar methods here
     /// <summary>Serves a requested file back on the one connection the request arrived on.</summary>
     public async Task ServeFile(Guid fileId, Peer requester)
     {
@@ -103,7 +104,6 @@ public class FileWorkflow : IFileWorkflow
             byte[] fileBuf = new byte[chunkSize];
             long offset = 0;
 
-            // TODO: Figure out how to generate a new GUID for each frame, everything else should be the same, just the frame ID differs to prevent duplicates
             var metadata = new FrameMetadata() { CorrelationId = correlationId };
 
             var fileStart = new FileTransferStart(fileId, entry.Name, entry.Length, correlationId);
@@ -216,7 +216,6 @@ public class FileWorkflow : IFileWorkflow
         byte[] fileBuf = new byte[chunkSize];
         long offset = 0;
 
-        // TODO: Figure out how to generate a new GUID for each frame, everything else should be the same, just the frame ID differs to prevent duplicates
         var metadata = new FrameMetadata() { CorrelationId = correlationId };
 
         var fileStart = new FileTransferStart(fileTransmissionId, file.Name, file.Length, correlationId);

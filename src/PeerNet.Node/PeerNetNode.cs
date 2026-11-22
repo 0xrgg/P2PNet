@@ -62,9 +62,6 @@ public class PeerNetNode
         _outbox = outbox;
 
         CalculateIpAddress();
-
-        OnMessageReceived += BroadcastMessage;
-
     }
 
     private void CalculateIpAddress()
@@ -146,16 +143,6 @@ public class PeerNetNode
     public void StartServer()
     {
         _peerNetServer.StartServer(HostAddress);
-    }
-
-    private async Task BroadcastMessage(string arg)
-    {
-        _logger.LogInformation(LogEvents.Network, "Starting file broadcast");
-
-        var payload = Encoding.UTF8.GetBytes(arg);
-
-        //await _fileWorkflow.Execute(string.Empty, _cts.Token);
-
     }
 
 

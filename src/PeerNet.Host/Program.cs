@@ -32,7 +32,5 @@ internal class Program
         var app = host.Services.GetRequiredService<PeerNetNode>();
 
         await app.Start();
-
-        await t;
     }
 }
