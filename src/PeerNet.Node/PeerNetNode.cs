@@ -1,4 +1,5 @@
-﻿using Microsoft.Extensions.Logging;
+﻿using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using PeerNet.Node.Discovery;
 using PeerNet.Node.Files;
 using PeerNet.Node.Ledger;
@@ -11,7 +12,11 @@ using System.Net.Sockets;
 
 namespace PeerNet.Node;
 
-public class PeerNetNode
+/// <summary>
+/// Runs the node for the lifetime of the host: starts the TCP server, consumes inbound messages,
+/// discovers peers, verifies ledger files and drains the outbox. The host cancels <c>stoppingToken</c> on shutdown (e.g. Ctrl+C).
+/// </summary>
+public class PeerNetNode : BackgroundService
 {
     private readonly ITcpServer _peerNetServer;
     private readonly IEventBus _eventBus;
@@ -22,10 +27,7 @@ public class PeerNetNode
     private readonly NodeIdentity _identity;
     private readonly FileIntegrityChecker _fileChecker;
     private readonly Outbox _outbox;
-
     private readonly ILedgerWorkflow _ledgerWorkflow;
-
-    private readonly CancellationTokenSource _cts = new();
 
     public IPAddress HostAddress { get; set; }
 
@@ -77,6 +79,38 @@ public class PeerNetNode
         }
     }
 
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        // Linked so that if one long-running loop ends, the other is stopped too
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
+        var ct = cts.Token;
+
+        _logger.LogInformation("Starting node with ID: {NodeId}", NodeId);
+
+        await _ledgerService.BuildLedgerFromJson();
+
+        // 1. Start local TCP server in background
+        StartServer();
+
+        // 2. Consume inbound frames before discovery starts dialling peers
+        var eventLoop = RunEventLoopAsync(ct);
+
+        // 3. Start discovery broadcast (runs 5 times and finishes, listener stays active)
+        await _bootstrap.StartDiscovery(HostAddress, NodeId, ct);
+
+        // 4. One-shot integrity pass; off the startup path and logs its own errors
+        _ = Task.Run(() => VerifyLedgerFiles(ct), ct);
+
+        // 5. Publish files dropped into the DropZone
+        var outbox = _outbox.RunAsync(ct);
+
+        // The node lives as long as its long-running loops do. If either one ends or faults,
+        // stop the other and rethrow, so the host logs the failure and shuts down instead of hanging.
+        var finished = await Task.WhenAny(eventLoop, outbox);
+        await cts.CancelAsync();
+        await finished;
+    }
+
     private async Task RunEventLoopAsync(CancellationToken cancellationToken)
     {
         // Single consumer: handlers run one at a time, in arrival order
@@ -86,57 +120,36 @@ public class PeerNetNode
         }
     }
 
-    public async Task Start()
+    private async Task VerifyLedgerFiles(CancellationToken ct)
     {
-        _logger.LogInformation("Starting node with ID: {NodeId}", _identity.NodeId);
-
-        await _ledgerService.BuildLedgerFromJson();
-
-        // 1. Start local TCP server in background
-        StartServer();
-
-        // 2. Consume inbound frames before discovery starts dialling peers
-        _ = RunEventLoopAsync(_cts.Token);
-
-        // 3. Start discovery broadcast (runs 5 times and finishes, listener stays active)
-        await _bootstrap.StartDiscovery(HostAddress, NodeId, _cts.Token);
-
-        _ = Task.Run(async () =>
+        try
         {
-            try
+            var found = 0;
+
+            await foreach (var issue in _fileChecker.VerifyFileIntegrity(ct))
             {
-                var found = 0;
-
-                await foreach (var issue in _fileChecker.VerifyFileIntegrity(_cts.Token))
-                {
-                    _logger.LogError("An issue was found with ledger item: {Id}", issue.Item.ObjectId);
-                    _ledgerWorkflow.MarkForRepair(issue.Item);
-                    found++;
-                }
-
-                if (found > 0)
-                {
-                    await _ledgerWorkflow.RequestLedgersFromAvailableNodes();
-                }
-
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError("An error occurred checking file integrity: {ExMessage}", ex.Message);
+                _logger.LogError("An issue was found with ledger item: {Id}", issue.Item.ObjectId);
+                _ledgerWorkflow.MarkForRepair(issue.Item);
+                found++;
             }
 
-        });
-
-        _ = _outbox.RunAsync(_cts.Token);
-
-        // Keep the application running indefinitely
-        await Task.Delay(Timeout.Infinite, _cts.Token);
+            if (found > 0)
+            {
+                await _ledgerWorkflow.RequestLedgersFromAvailableNodes();
+            }
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            // Shutting down
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "An error occurred checking file integrity");
+        }
     }
 
-    public void StartServer()
+    private void StartServer()
     {
         _peerNetServer.StartServer(HostAddress);
     }
-
-
 }

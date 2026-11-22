@@ -20,7 +20,7 @@ public static class ServiceCollectionExtensions
     {
         // Persisted key, so the NodeId survives restarts; resolved before anything can read it
         services.AddSingleton(NodeIdentity.LoadOrCreate(NodePaths.PublicKey, NodePaths.PrivateKey));
-        services.AddSingleton<PeerNetNode>();
+        services.AddHostedService<PeerNetNode>();
 
         // Discovery
         services.AddSingleton<IPeerNetBootstrap, PeerNetBootstrap>();

@@ -1,12 +1,9 @@
 using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Console;
 using PeerNet.Host.Logging;
 using PeerNet.Node;
-using System.Net;
-using System.Net.Sockets;
 
 internal class Program
 {
@@ -29,8 +26,7 @@ internal class Program
 
         using var host = builder.Build();
 
-        var app = host.Services.GetRequiredService<PeerNetNode>();
-
-        await app.Start();
+        // Runs PeerNetNode (a hosted service) until Ctrl+C / SIGTERM, then stops it gracefully
+        await host.RunAsync();
     }
 }
