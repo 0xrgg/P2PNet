@@ -31,26 +31,8 @@ internal class Program
 
         var app = host.Services.GetRequiredService<PeerNetNode>();
 
-        var t = app.Start();
-
-        // Give it a few seconds to discover peers and connect, then listen for broadcast triggers
-        await Task.Delay(7000);
-
-        var trigger = Trigger(app);
+        await app.Start();
 
         await t;
-    }
-
-    public static async Task Trigger(PeerNetNode node)
-    {
-        var listener = new TcpListener(IPAddress.Any, 5051);
-        listener.Start();
-
-        while (true)
-        {
-            using var client = await listener.AcceptTcpClientAsync();
-
-            await node.OnMessageReceived.Invoke("Hello from Main! This is a custom broadcast message.");
-        }
     }
 }
