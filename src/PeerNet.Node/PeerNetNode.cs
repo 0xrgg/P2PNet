@@ -2,14 +2,12 @@
 using PeerNet.Node.Discovery;
 using PeerNet.Node.Files;
 using PeerNet.Node.Ledger;
-using PeerNet.Node.Logging;
 using PeerNet.Node.Messaging;
 using PeerNet.Node.Storage;
 using PeerNet.Node.Transport;
 using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
-using System.Text;
 
 namespace PeerNet.Node;
 
@@ -26,11 +24,8 @@ public class PeerNetNode
     private readonly Outbox _outbox;
 
     private readonly ILedgerWorkflow _ledgerWorkflow;
-    private readonly IFileWorkflow _fileWorkflow;
 
     private readonly CancellationTokenSource _cts = new();
-
-    public Func<string, Task> OnMessageReceived { get; set; }
 
     public IPAddress HostAddress { get; set; }
 
@@ -39,7 +34,6 @@ public class PeerNetNode
     public PeerNetNode(
         NodeIdentity identity,
         ITcpServer peerNetServer,
-        IFileWorkflow fileWorkflow,
         IEventBus eventBus,
         EventDispatcher dispatcher,
         IPeerNetBootstrap bootstrap,
@@ -50,7 +44,6 @@ public class PeerNetNode
         Outbox outbox)
     {
         _peerNetServer = peerNetServer;
-        _fileWorkflow = fileWorkflow;
         _eventBus = eventBus;
         _dispatcher = dispatcher;
         _identity = identity;
