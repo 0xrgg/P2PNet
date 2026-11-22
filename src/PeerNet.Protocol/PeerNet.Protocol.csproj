@@ -1,0 +1,5 @@
+﻿<Project Sdk="Microsoft.NET.Sdk"><!-- Wire format only: framing, codecs and message contracts. No sockets, disk or DI. -->
+
+
+
+</Project>
